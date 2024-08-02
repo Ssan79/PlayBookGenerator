@@ -1,5 +1,4 @@
-import yaml
-from flask import Flask, request, jsonify, render_template
+from flask import Flask, render_template, request, jsonify
 
 app = Flask(__name__)
 
@@ -11,46 +10,30 @@ def index():
 
 @app.route('/generate', methods=['POST'])
 def generate():
-    hosts = request.form.get('hosts', '')
-    become = request.form.get('become', 'no')
+    data = request.get_json()
 
-    tasks = []
-    task_names = request.form.getlist('tasks')
-    actions = request.form.getlist('actions')
-    messages = request.form.getlist('messages')
-    conditions = request.form.getlist('conditions')
-    conditions_type = request.form.getlist('conditions_type')
-    conditions_value = request.form.getlist('conditions_value')
-    tags = request.form.getlist('tags')
-    tags_name = request.form.getlist('tags_name')
+    hosts = data['hosts']
+    become = data['become']
+    tasks = data['tasks']
+    tags = data['tags']
 
-    for i in range(len(task_names)):
-        task = {
-            'name': task_names[i],
-            'command': actions[i]
-        }
-        if conditions[i] == 'yes' and conditions_type[i] and conditions_value[i]:
-            task[conditions_type[i]] = conditions_value[i]
-        if tags[i] == 'yes' and tags_name[i]:
-            task['tags'] = [tags_name[i]]
-        tasks.append(task)
-        if messages[i]:
-            tasks.append({
-                'debug': {
-                    'msg': messages[i]
-                }
-            })
+    yaml_output = "---\n- hosts: {}\n".format(hosts)
 
-    playbook = [{
-        'hosts': hosts,
-        'become': become,
-        'tasks': tasks
-    }]
+    if become.lower() == "yes":
+        yaml_output += "  become: yes\n"
 
-    yaml_output = yaml.dump(playbook, sort_keys=False)
+    yaml_output += "  tasks:\n"
 
-    # Return YAML content as response
-    return jsonify({'yaml': yaml_output})
+    for task in tasks:
+        yaml_output += "  - name: {}\n".format(task['name'])
+        yaml_output += "    command: {}\n".format(task['command'])
+        if task.get('become'):
+            yaml_output += "    become: {}\n".format(task['become'])
+        if task.get('tags'):
+            yaml_output += "    tags: {}\n".format(task['tags'])
+        yaml_output += "\n"  # Add a newline between tasks for readability
+
+    return jsonify(yaml_output=yaml_output)
 
 
 if __name__ == '__main__':
