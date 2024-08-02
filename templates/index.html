@@ -97,6 +97,7 @@
                 const labelsAndInputs = [
                     { label: 'Task Name', name: 'tasks', type: 'text', required: true },
                     { label: 'Task Details', name: 'actions', type: 'textarea', required: true },
+                    { label: 'Become (yes or no)', name: 'become_task', type: 'select', required: false },
                     { label: 'Message', name: 'messages', type: 'text', required: false },
                     { label: 'Condition (yes or no)', name: 'conditions', type: 'select', required: false },
                     { label: 'Condition Type', name: 'conditions_type', type: 'select', required: false },
@@ -120,9 +121,7 @@
                     if (type === 'select') {
                         const select = document.createElement('select');
                         select.name = name;
-                        if (name === 'conditions') {
-                            select.innerHTML = `<option value="no">No</option><option value="yes">Yes</option>`;
-                        } else if (name === 'tags') {
+                        if (name === 'conditions' || name === 'tags' || name === 'become_task') {
                             select.innerHTML = `<option value="no">No</option><option value="yes">Yes</option>`;
                         } else {
                             conditionOptions.forEach(option => {
@@ -189,16 +188,15 @@
 
             const updatePreview = () => {
                 const hosts = document.getElementById('hosts').value.trim().split(',');
-                const become = document.getElementById('become').value;
                 const taskFieldsets = document.querySelectorAll('#tasksContainer fieldset');
 
                 let preview = '---\n- hosts: ' + hosts.join(', ') + '\n';
-                preview += '  become: ' + become + '\n';
                 preview += '  tasks:\n';
 
                 taskFieldsets.forEach(fieldset => {
                     const taskName = fieldset.querySelector('input[name="tasks"]').value.trim();
                     const taskDetails = fieldset.querySelector('textarea[name="actions"]').value.trim();
+                    const becomeTask = fieldset.querySelector('select[name="become_task"]').value;
                     const message = fieldset.querySelector('input[name="messages"]').value.trim();
                     const condition = fieldset.querySelector('select[name="conditions"]').value;
                     const conditionType = fieldset.querySelector('select[name="conditions_type"]').value;
@@ -208,7 +206,11 @@
 
                     if (taskName && taskDetails) {
                         preview += `  - name: ${taskName}\n`;
-                        preview += `    command: ${taskDetails}\n`;
+                        preview += `    ${taskDetails}\n`;
+
+                        if (becomeTask === 'yes') {
+                            preview += `    become: yes\n`;
+                        }
 
                         if (condition === 'yes' && conditionType && conditionValue) {
                             preview += `    ${conditionType}: ${conditionValue}\n`;
@@ -217,46 +219,23 @@
                         if (tags === 'yes' && tagsName) {
                             preview += `    tags: [${tagsName}]\n`;
                         }
-
-                        if (message) {
-                            preview += `  - debug:\n`;
-                            preview += `      msg: ${message}\n`;
-                        }
                     }
 
-                    preview += '\n'; // Add a blank line between tasks for readability
+                    if (message) {
+                        preview += `  - debug:\n`;
+                        preview += `      msg: ${message}\n`;
+                    }
+
+                    preview += '\n';
                 });
 
-                const previewElement = document.getElementById('preview');
-                previewElement.textContent = preview;
-                hljs.highlightElement(previewElement);
+                document.getElementById('playbookPreview').textContent = preview;
+                hljs.highlightAll();
             };
 
-            const submitForm = async (event) => {
-                event.preventDefault();
-                const formData = new FormData(event.target);
-                const response = await fetch('/generate', {
-                    method: 'POST',
-                    body: formData
-                });
-
-                if (response.ok) {
-                    const result = await response.json();
-                    const downloadLink = document.getElementById('downloadLink');
-                    downloadLink.href = 'data:text/yaml;charset=utf-8,' + encodeURIComponent(result.yaml);
-                    downloadLink.style.display = 'block';
-                } else {
-                    alert('Failed to generate playbook.');
-                }
-            };
-
-            document.getElementById('addTaskButton').addEventListener('click', addTask);
-            document.querySelector('form').addEventListener('submit', submitForm);
-
-            // Add event listeners for real-time preview update
-            document.querySelectorAll('input, textarea, select').forEach(element => {
-                element.addEventListener('input', updatePreview);
-            });
+            document.getElementById('addTask').addEventListener('click', addTask);
+            document.getElementById('playbookForm').addEventListener('input', updatePreview);
+            addTask();  // Initial task
         });
     </script>
 </head>
@@ -264,23 +243,18 @@
     <div class="container">
         <div class="form-container">
             <h1>Ansible Playbook Generator</h1>
-            <form>
+            <form id="playbookForm">
                 <label for="hosts">Hosts (comma-separated):</label>
-                <input type="text" id="hosts" name="hosts" required><br>
-                <label for="become">Become (yes or no):</label>
-                <select id="become" name="become" required>
-                    <option value="yes">Yes</option>
-                    <option value="no">No</option>
-                </select><br>
+                <input type="text" id="hosts" name="hosts" placeholder="e.g., all, webserver" required>
                 <div id="tasksContainer"></div>
-                <button type="button" id="addTaskButton">Add Task</button><br><br>
+                <button type="button" id="addTask">Add Task</button>
                 <button type="submit">Generate Playbook</button>
             </form>
         </div>
         <div class="preview-container">
             <h2>Playbook Preview</h2>
-            <pre id="preview" class="yaml"></pre>
-            <a id="downloadLink" style="display:none;" download="playbook.yml">Download Playbook</a>
+            <pre><code id="playbookPreview" class="yaml"></code></pre>
+            <a id="downloadLink" href="#" download="playbook.yml" class="hidden">Download Playbook</a>
         </div>
     </div>
 </body>
