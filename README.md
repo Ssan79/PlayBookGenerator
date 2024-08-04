@@ -1,8 +1,8 @@
-
+Since the application is still in incubation stage, I have not packaged it as full webapp. Hence Manual setup required as follows!
 
 # Pre-Requisites
 
-Install the latest version of Python. Once Python is installed, follow the instructions below to run the application.
+Install the latest version of Python. Once Python is installed,  Setu up virtual environment. follow the instructions below to run the application.
 
 ## Running the Application
 
