@@ -3,6 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <title>Ansible Playbook Generator</title>
+    <link rel="shortcut icon" href="{{ url_for('static', filename='favicon.ico') }}">
     <style>
         body {
             font-family: Arial, sans-serif;
@@ -88,7 +89,6 @@
         document.addEventListener('DOMContentLoaded', () => {
             const addTask = () => {
                 const container = document.getElementById('tasksContainer');
-
                 const fieldset = document.createElement('fieldset');
                 const legend = document.createElement('legend');
                 legend.textContent = `Task ${container.children.length + 1}`;
@@ -97,21 +97,17 @@
                 const labelsAndInputs = [
                     { label: 'Task Name', name: 'tasks', type: 'text', required: true },
                     { label: 'Task Details', name: 'actions', type: 'textarea', required: true },
+                    { label: 'Hosts (comma-separated)', name: 'hosts', type: 'text', required: true },
                     { label: 'Become (yes or no)', name: 'become_task', type: 'select', required: false },
-                    { label: 'Message', name: 'messages', type: 'text', required: false },
                     { label: 'Condition (yes or no)', name: 'conditions', type: 'select', required: false },
                     { label: 'Condition Type', name: 'conditions_type', type: 'select', required: false },
                     { label: 'Condition Value', name: 'conditions_value', type: 'text', required: false },
+                    { label: 'Message', name: 'messages', type: 'text', required: false },
                     { label: 'Tags (yes or no)', name: 'tags', type: 'select', required: false },
                     { label: 'Tag Name', name: 'tags_name', type: 'text', required: false }
                 ];
 
-                const conditionOptions = [
-                    "when", "failed_when", "changed_when", "check_mode", "run_once", "loop",
-                    "until", "retries", "delay", "ignore_errors", "delegate_to", "tags",
-                    "notify", "register", "include_tasks", "import_tasks", "import_playbook",
-                    "block", "rescue", "always"
-                ];
+                const conditionOptions = ["when", "failed_when", "changed_when", "check_mode", "run_once", "loop", "until", "retries", "delay", "ignore_errors"];
 
                 labelsAndInputs.forEach(({ label, name, type, required }) => {
                     const labelElement = document.createElement('label');
@@ -121,16 +117,9 @@
                     if (type === 'select') {
                         const select = document.createElement('select');
                         select.name = name;
-                        if (name === 'conditions' || name === 'tags' || name === 'become_task') {
-                            select.innerHTML = `<option value="no">No</option><option value="yes">Yes</option>`;
-                        } else {
-                            conditionOptions.forEach(option => {
-                                const optElement = document.createElement('option');
-                                optElement.value = option;
-                                optElement.textContent = option;
-                                select.appendChild(optElement);
-                            });
-                            select.disabled = true;
+                        select.innerHTML = `<option value="no">No</option><option value="yes">Yes</option>`;
+                        if (name === 'conditions_type') {
+                            select.innerHTML = conditionOptions.map(option => `<option value="${option}">${option}</option>`).join('');
                         }
                         fieldset.appendChild(select);
                     } else {
@@ -139,102 +128,65 @@
                         input.name = name;
                         input.placeholder = label;
                         if (required) input.required = true;
-                        if (name === 'conditions_value' || name === 'tags_name') input.classList.add('hidden');
                         fieldset.appendChild(input);
                     }
 
                     fieldset.appendChild(document.createElement('br'));
                 });
 
-                const conditionSelect = fieldset.querySelector('select[name="conditions"]');
-                const conditionTypeSelect = fieldset.querySelector('select[name="conditions_type"]');
-                const conditionValueInput = fieldset.querySelector('input[name="conditions_value"]');
-                const tagsSelect = fieldset.querySelector('select[name="tags"]');
-                const tagsNameInput = fieldset.querySelector('input[name="tags_name"]');
-
-                conditionSelect.addEventListener('change', (event) => {
-                    if (event.target.value === 'yes') {
-                        conditionTypeSelect.disabled = false;
-                        conditionValueInput.classList.remove('hidden');
-                    } else {
-                        conditionTypeSelect.disabled = true;
-                        conditionValueInput.classList.add('hidden');
-                    }
-                    updatePreview();
-                });
-
-                tagsSelect.addEventListener('change', (event) => {
-                    if (event.target.value === 'yes') {
-                        tagsNameInput.classList.remove('hidden');
-                    } else {
-                        tagsNameInput.classList.add('hidden');
-                    }
-                    updatePreview();
-                });
-
-                const deleteButton = document.createElement('button');
-                deleteButton.type = 'button';
-                deleteButton.textContent = 'Delete Task';
-                deleteButton.classList.add('delete-task');
-                deleteButton.addEventListener('click', () => {
-                    fieldset.remove();
-                    updatePreview();
-                });
-                fieldset.appendChild(deleteButton);
-
                 container.appendChild(fieldset);
                 updatePreview();
             };
 
             const updatePreview = () => {
-                const hosts = document.getElementById('hosts').value.trim().split(',');
                 const taskFieldsets = document.querySelectorAll('#tasksContainer fieldset');
 
-                let preview = '---\n- hosts: ' + hosts.join(', ') + '\n';
-                preview += '  tasks:\n';
-
+                let preview = '---\n';
                 taskFieldsets.forEach(fieldset => {
                     const taskName = fieldset.querySelector('input[name="tasks"]').value.trim();
                     const taskDetails = fieldset.querySelector('textarea[name="actions"]').value.trim();
+                    const hosts = fieldset.querySelector('input[name="hosts"]').value.trim();
                     const becomeTask = fieldset.querySelector('select[name="become_task"]').value;
-                    const message = fieldset.querySelector('input[name="messages"]').value.trim();
                     const condition = fieldset.querySelector('select[name="conditions"]').value;
                     const conditionType = fieldset.querySelector('select[name="conditions_type"]').value;
                     const conditionValue = fieldset.querySelector('input[name="conditions_value"]').value.trim();
+                    const message = fieldset.querySelector('input[name="messages"]').value.trim();
                     const tags = fieldset.querySelector('select[name="tags"]').value;
                     const tagsName = fieldset.querySelector('input[name="tags_name"]').value.trim();
 
                     if (taskName && taskDetails) {
-                        preview += `  - name: ${taskName}\n`;
-                        preview += `    ${taskDetails}\n`;
+                        preview += `- hosts: ${hosts}\n`;
+                        if (becomeTask === 'yes') preview += `  become: yes\n`;
+                        preview += `  tasks:\n`;
+                        preview += `    - name: ${taskName}\n`;
 
-                        if (becomeTask === 'yes') {
-                            preview += `    become: yes\n`;
-                        }
+                        const taskLines = taskDetails.split('\n').map(line => `         ${line}`);
+                        preview += taskLines.join('\n') + '\n';
 
                         if (condition === 'yes' && conditionType && conditionValue) {
-                            preview += `    ${conditionType}: ${conditionValue}\n`;
+                            preview += `      ${conditionType}: ${conditionValue}\n`;
                         }
 
                         if (tags === 'yes' && tagsName) {
-                            preview += `    tags: [${tagsName}]\n`;
+                            preview += `      tags: ${tagsName}\n`;
                         }
-                    }
 
-                    if (message) {
-                        preview += `  - debug:\n`;
-                        preview += `      msg: ${message}\n`;
-                    }
+                        if (message) {
+                            preview += `    - debug:\n`;
+                            preview += `        msg: "${message}"\n`;
+                        }
 
-                    preview += '\n';
+                        preview += '\n';
+                    }
                 });
 
-                document.getElementById('playbookPreview').textContent = preview;
+                document.getElementById('preview').textContent = preview;
                 hljs.highlightAll();
             };
 
             document.getElementById('addTask').addEventListener('click', addTask);
             document.getElementById('playbookForm').addEventListener('input', updatePreview);
+
             addTask();  // Initial task
         });
     </script>
@@ -243,18 +195,16 @@
     <div class="container">
         <div class="form-container">
             <h1>Ansible Playbook Generator</h1>
-            <form id="playbookForm">
-                <label for="hosts">Hosts (comma-separated):</label>
-                <input type="text" id="hosts" name="hosts" placeholder="e.g., all, webserver" required>
+            <form id="playbookForm" action="/generate" method="POST">
                 <div id="tasksContainer"></div>
                 <button type="button" id="addTask">Add Task</button>
-                <button type="submit">Generate Playbook</button>
+                <button type="submit" id="generate">Generate Playbook</button>
             </form>
         </div>
         <div class="preview-container">
             <h2>Playbook Preview</h2>
-            <pre><code id="playbookPreview" class="yaml"></code></pre>
-            <a id="downloadLink" href="#" download="playbook.yml" class="hidden">Download Playbook</a>
+            <pre><code id="preview" class="yaml"></code></pre>
+            <a id="downloadLink" download="playbook.yml" href="#">Download Playbook</a>
         </div>
     </div>
 </body>
