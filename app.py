@@ -1,4 +1,5 @@
 from flask import Flask, render_template, request, jsonify
+import yaml
 
 app = Flask(__name__)
 
@@ -9,31 +10,46 @@ def index():
 
 
 @app.route('/generate', methods=['POST'])
-def generate():
-    data = request.get_json()
+def generate_playbook():
+    tasks = []
 
-    hosts = data['hosts']
-    become = data['become']
-    tasks = data['tasks']
-    tags = data['tags']
+    num_tasks = len(request.form.getlist('tasks'))
 
-    yaml_output = "---\n- hosts: {}\n".format(hosts)
+    for i in range(num_tasks):
+        task = {}
+        task_name = request.form.getlist('tasks')[i]
+        task_details = request.form.getlist('actions')[i]
+        hosts = request.form.getlist('hosts')[i]
+        become_task = request.form.getlist('become_task')[i]
+        condition = request.form.getlist('conditions')[i]
+        condition_type = request.form.getlist('conditions_type')[i]
+        condition_value = request.form.getlist('conditions_value')[i]
+        message = request.form.getlist('messages')[i]
+        tags = request.form.getlist('tags')[i]
+        tags_name = request.form.getlist('tags_name')[i]
 
-    if become.lower() == "yes":
-        yaml_output += "  become: yes\n"
+        task['hosts'] = hosts
+        if become_task == 'yes':
+            task['become'] = True
+        task['tasks'] = [{'name': task_name}]
 
-    yaml_output += "  tasks:\n"
+        task_details_list = task_details.split('\n')
+        task['tasks'][0].update({'action': task_details_list})
 
-    for task in tasks:
-        yaml_output += "  - name: {}\n".format(task['name'])
-        yaml_output += "    command: {}\n".format(task['command'])
-        if task.get('become'):
-            yaml_output += "    become: {}\n".format(task['become'])
-        if task.get('tags'):
-            yaml_output += "    tags: {}\n".format(task['tags'])
-        yaml_output += "\n"  # Add a newline between tasks for readability
+        if condition == 'yes' and condition_type and condition_value:
+            task['tasks'][0][condition_type] = condition_value
 
-    return jsonify(yaml_output=yaml_output)
+        if tags == 'yes' and tags_name:
+            task['tasks'][0]['tags'] = tags_name
+
+        if message:
+            task['tasks'].append({'debug': {'msg': message}})
+
+        tasks.append(task)
+
+    playbook_yaml = yaml.dump(tasks, sort_keys=False, default_flow_style=False)
+
+    return jsonify({'playbook': playbook_yaml})
 
 
 if __name__ == '__main__':
