@@ -3,201 +3,38 @@
 <head>
     <meta charset="UTF-8">
     <title>Ansible Playbook Generator</title>
-    <link rel="shortcut icon" href="{{ url_for('static', filename='favicon.ico') }}">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/codemirror@5.65.5/lib/codemirror.css">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/codemirror@5.65.5/theme/monokai.css">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/codemirror@5.65.5/addon/lint/lint.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.5.1/styles/default.min.css">
     <style>
-        body {
-            font-family: Arial, sans-serif;
-            margin: 0;
-            padding: 0;
-            background-color: #f4f4f9;
-        }
-        .container {
-            display: flex;
-            justify-content: space-between;
-            padding: 20px;
-        }
-        .form-container {
-            width: 60%;
-            background-color: #fff;
-            padding: 20px;
-            border-radius: 8px;
-            box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
-        }
-        .form-container h1 {
-            margin-top: 0;
-        }
-        .preview-container {
-            width: 35%;
-            background-color: #fff;
-            padding: 20px;
-            border-radius: 8px;
-            box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
-        }
-        .preview-container h2 {
-            margin-top: 0;
-        }
-        fieldset {
-            margin-bottom: 15px;
-            border: 1px solid #ddd;
-            border-radius: 8px;
-            padding: 15px;
-        }
-        legend {
-            font-weight: bold;
-        }
-        label {
-            display: block;
-            margin-bottom: 5px;
-            font-weight: bold;
-        }
-        input[type="text"], textarea, select {
-            width: calc(100% - 22px);
-            padding: 10px;
-            margin-bottom: 10px;
-            border: 1px solid #ddd;
-            border-radius: 4px;
-            font-size: 16px;
-        }
-        textarea {
-            height: 80px;
-        }
-        button {
-            padding: 10px 15px;
-            background-color: #007bff;
-            color: #fff;
-            border: none;
-            border-radius: 4px;
-            cursor: pointer;
-            font-size: 16px;
-        }
-        button.delete-task {
-            background-color: #dc3545;
-        }
-        #downloadLink {
-            display: block;
-            margin-top: 20px;
-            text-decoration: none;
-            color: #007bff;
-        }
-        .hidden {
-            display: none;
-        }
+        body { font-family: Arial, sans-serif; background-color: #f4f4f9; padding: 20px; }
+        .container { display: flex; flex-direction: column; gap: 20px; }
+        .form-container { width: 100%; background-color: #fff; padding: 20px; border-radius: 8px; box-shadow: 0 0 10px rgba(0, 0, 0, 0.1); }
+        .task-pane { margin-bottom: 15px; padding: 15px; border: 1px solid #ddd; border-radius: 8px; }
+        label { display: block; margin-bottom: 5px; font-weight: bold; }
+        .CodeMirror { border: 1px solid #ddd; border-radius: 4px; font-size: 14px; margin-bottom: 10px; max-height: 150px; overflow-y: auto; }
+        .CodeMirror-lint-tooltip { font-size: 12px; }
+        button { padding: 10px 15px; background-color: #007bff; color: #fff; border: none; border-radius: 4px; cursor: pointer; font-size: 16px; }
+        button#generate { margin-top: 10px; }
+        .preview-container { background-color: #fff; padding: 20px; border-radius: 8px; box-shadow: 0 0 10px rgba(0, 0, 0, 0.1); }
+        pre { background-color: #282a36; color: #f8f8f2; padding: 10px; border-radius: 5px; max-height: 200px; white-space: pre-wrap; word-wrap: break-word; overflow-y: auto; }
     </style>
-    <link rel="stylesheet" href="//cdnjs.cloudflare.com/ajax/libs/highlight.js/11.5.1/styles/default.min.css">
-    <script src="//cdnjs.cloudflare.com/ajax/libs/highlight.js/11.5.1/highlight.min.js"></script>
-    <script>
-        document.addEventListener('DOMContentLoaded', () => {
-            const addTask = () => {
-                const container = document.getElementById('tasksContainer');
-                const fieldset = document.createElement('fieldset');
-                const legend = document.createElement('legend');
-                legend.textContent = `Task ${container.children.length + 1}`;
-                fieldset.appendChild(legend);
-
-                const labelsAndInputs = [
-                    { label: 'Task Name', name: 'tasks', type: 'text', required: true },
-                    { label: 'Task Details', name: 'actions', type: 'textarea', required: true },
-                    { label: 'Hosts (comma-separated)', name: 'hosts', type: 'text', required: true },
-                    { label: 'Become (yes or no)', name: 'become_task', type: 'select', required: false },
-                    { label: 'Condition (yes or no)', name: 'conditions', type: 'select', required: false },
-                    { label: 'Condition Type', name: 'conditions_type', type: 'select', required: false },
-                    { label: 'Condition Value', name: 'conditions_value', type: 'text', required: false },
-                    { label: 'Message', name: 'messages', type: 'text', required: false },
-                    { label: 'Tags (yes or no)', name: 'tags', type: 'select', required: false },
-                    { label: 'Tag Name', name: 'tags_name', type: 'text', required: false }
-                ];
-
-                const conditionOptions = ["when", "failed_when", "changed_when", "check_mode", "run_once", "loop", "until", "retries", "delay", "ignore_errors"];
-
-                labelsAndInputs.forEach(({ label, name, type, required }) => {
-                    const labelElement = document.createElement('label');
-                    labelElement.textContent = `${label}:`;
-                    fieldset.appendChild(labelElement);
-
-                    if (type === 'select') {
-                        const select = document.createElement('select');
-                        select.name = name;
-                        select.innerHTML = `<option value="no">No</option><option value="yes">Yes</option>`;
-                        if (name === 'conditions_type') {
-                            select.innerHTML = conditionOptions.map(option => `<option value="${option}">${option}</option>`).join('');
-                        }
-                        fieldset.appendChild(select);
-                    } else {
-                        const input = document.createElement(type === 'textarea' ? 'textarea' : 'input');
-                        input.type = type;
-                        input.name = name;
-                        input.placeholder = label;
-                        if (required) input.required = true;
-                        fieldset.appendChild(input);
-                    }
-
-                    fieldset.appendChild(document.createElement('br'));
-                });
-
-                container.appendChild(fieldset);
-                updatePreview();
-            };
-
-            const updatePreview = () => {
-                const taskFieldsets = document.querySelectorAll('#tasksContainer fieldset');
-
-                let preview = '---\n';
-                taskFieldsets.forEach(fieldset => {
-                    const taskName = fieldset.querySelector('input[name="tasks"]').value.trim();
-                    const taskDetails = fieldset.querySelector('textarea[name="actions"]').value.trim();
-                    const hosts = fieldset.querySelector('input[name="hosts"]').value.trim();
-                    const becomeTask = fieldset.querySelector('select[name="become_task"]').value;
-                    const condition = fieldset.querySelector('select[name="conditions"]').value;
-                    const conditionType = fieldset.querySelector('select[name="conditions_type"]').value;
-                    const conditionValue = fieldset.querySelector('input[name="conditions_value"]').value.trim();
-                    const message = fieldset.querySelector('input[name="messages"]').value.trim();
-                    const tags = fieldset.querySelector('select[name="tags"]').value;
-                    const tagsName = fieldset.querySelector('input[name="tags_name"]').value.trim();
-
-                    if (taskName && taskDetails) {
-                        preview += `- hosts: ${hosts}\n`;
-                        if (becomeTask === 'yes') preview += `  become: yes\n`;
-                        preview += `  tasks:\n`;
-                        preview += `    - name: ${taskName}\n`;
-
-                        const taskLines = taskDetails.split('\n').map(line => `         ${line}`);
-                        preview += taskLines.join('\n') + '\n';
-
-                        if (condition === 'yes' && conditionType && conditionValue) {
-                            preview += `      ${conditionType}: ${conditionValue}\n`;
-                        }
-
-                        if (tags === 'yes' && tagsName) {
-                            preview += `      tags: ${tagsName}\n`;
-                        }
-
-                        if (message) {
-                            preview += `    - debug:\n`;
-                            preview += `        msg: "${message}"\n`;
-                        }
-
-                        preview += '\n';
-                    }
-                });
-
-                document.getElementById('preview').textContent = preview;
-                hljs.highlightAll();
-            };
-
-            document.getElementById('addTask').addEventListener('click', addTask);
-            document.getElementById('playbookForm').addEventListener('input', updatePreview);
-
-            addTask();  // Initial task
-        });
-    </script>
+    <script src="https://cdn.jsdelivr.net/npm/codemirror@5.65.5/lib/codemirror.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/codemirror@5.65.5/mode/yaml/yaml.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/codemirror@5.65.5/addon/lint/lint.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/codemirror@5.65.5/addon/lint/yaml-lint.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/js-yaml@4.1.0/dist/js-yaml.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/codemirror@5.65.5/addon/hint/show-hint.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/codemirror@5.65.5/addon/hint/yaml-hint.js"></script>
 </head>
 <body>
+    <h1>Ansible Playbook Generator</h1>
     <div class="container">
         <div class="form-container">
-            <h1>Ansible Playbook Generator</h1>
             <form id="playbookForm" action="/generate" method="POST">
                 <div id="tasksContainer"></div>
-                <button type="button" id="addTask">Add Task</button>
+                <button type="button" id="addTask">Add New Task</button>
                 <button type="submit" id="generate">Generate Playbook</button>
             </form>
         </div>
@@ -207,5 +44,73 @@
             <a id="downloadLink" download="playbook.yml" href="#">Download Playbook</a>
         </div>
     </div>
+
+    <script>
+        let editors = [];
+
+        document.addEventListener('DOMContentLoaded', () => {
+            const addTask = () => {
+                const container = document.getElementById('tasksContainer');
+                const taskPane = document.createElement('div');
+                taskPane.classList.add('task-pane');
+
+                // Task Name
+                const taskNameLabel = document.createElement('label');
+                taskNameLabel.textContent = 'Task Name:';
+                taskPane.appendChild(taskNameLabel);
+                const taskNameInput = document.createElement('input');
+                taskNameInput.type = 'text';
+                taskNameInput.name = 'tasks';
+                taskNameInput.required = true;
+                taskNameInput.addEventListener('input', updatePreview);
+                taskPane.appendChild(taskNameInput);
+
+                // Task Details with CodeMirror editor
+                const taskDetailsLabel = document.createElement('label');
+                taskDetailsLabel.textContent = 'Task Details:';
+                taskPane.appendChild(taskDetailsLabel);
+                const taskDetailsTextarea = document.createElement('textarea');
+                taskDetailsTextarea.name = 'actions';
+                taskPane.appendChild(taskDetailsTextarea);
+
+                // Initialize CodeMirror editor for Task Details with linting enabled
+                const editor = CodeMirror.fromTextArea(taskDetailsTextarea, {
+                    mode: "yaml",
+                    lineNumbers: false,
+                    theme: "monokai",
+                    lineWrapping: true,
+                    autoRefresh: true,
+                    extraKeys: { "Ctrl-Space": "autocomplete" },
+                    gutters: ["CodeMirror-lint-markers"],
+                    lint: true
+                });
+
+                editor.on("change", updatePreview);
+                editors.push(editor);
+
+                container.appendChild(taskPane);
+                updatePreview();
+            };
+
+            const updatePreview = () => {
+                const tasks = document.querySelectorAll('.task-pane');
+                let preview = '---\n';
+
+                tasks.forEach((task, index) => {
+                    const name = task.querySelector('input[name="tasks"]').value.trim();
+                    const details = editors[index].getValue().trim();
+
+                    if (name) preview += `- name: ${name}\n`;
+                    if (details) preview += `  ${details.replace(/\n/g, '\n  ')}\n\n`;
+                });
+
+                document.getElementById('preview').textContent = preview;
+                hljs.highlightAll();
+            };
+
+            document.getElementById('addTask').addEventListener('click', addTask);
+            addTask();  // Add initial task pane on page load
+        });
+    </script>
 </body>
 </html>

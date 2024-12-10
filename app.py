@@ -1,5 +1,5 @@
-from flask import Flask, render_template, request, jsonify
 import yaml
+from flask import Flask, render_template, request, jsonify, send_file
 
 app = Flask(__name__)
 
@@ -11,45 +11,31 @@ def index():
 
 @app.route('/generate', methods=['POST'])
 def generate_playbook():
-    tasks = []
+    try:
+        tasks = request.form.getlist('tasks')
+        actions = request.form.getlist('actions')
 
-    num_tasks = len(request.form.getlist('tasks'))
+        playbook_content = []
 
-    for i in range(num_tasks):
-        task = {}
-        task_name = request.form.getlist('tasks')[i]
-        task_details = request.form.getlist('actions')[i]
-        hosts = request.form.getlist('hosts')[i]
-        become_task = request.form.getlist('become_task')[i]
-        condition = request.form.getlist('conditions')[i]
-        condition_type = request.form.getlist('conditions_type')[i]
-        condition_value = request.form.getlist('conditions_value')[i]
-        message = request.form.getlist('messages')[i]
-        tags = request.form.getlist('tags')[i]
-        tags_name = request.form.getlist('tags_name')[i]
+        for task_name, action in zip(tasks, actions):
+            try:
+                action_yaml = yaml.safe_load(action) if action else {}
+            except yaml.YAMLError as e:
+                return jsonify({'error': f'YAML syntax error in Task "{task_name}": {str(e)}'}), 400
 
-        task['hosts'] = hosts
-        if become_task == 'yes':
-            task['become'] = True
-        task['tasks'] = [{'name': task_name}]
+            playbook_content.append({
+                'name': task_name,
+                'tasks': [action_yaml] if action_yaml else []
+            })
 
-        task_details_list = task_details.split('\n')
-        task['tasks'][0].update({'action': task_details_list})
+        playbook_path = "playbook.yml"
+        with open(playbook_path, 'w') as file:
+            yaml.dump(playbook_content, file)
 
-        if condition == 'yes' and condition_type and condition_value:
-            task['tasks'][0][condition_type] = condition_value
+        return send_file(playbook_path, as_attachment=True)
 
-        if tags == 'yes' and tags_name:
-            task['tasks'][0]['tags'] = tags_name
-
-        if message:
-            task['tasks'].append({'debug': {'msg': message}})
-
-        tasks.append(task)
-
-    playbook_yaml = yaml.dump(tasks, sort_keys=False, default_flow_style=False)
-
-    return jsonify({'playbook': playbook_yaml})
+    except Exception as e:
+        return jsonify({'error': f'An error occurred: {str(e)}'}), 500
 
 
 if __name__ == '__main__':
