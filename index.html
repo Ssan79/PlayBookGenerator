@@ -1,0 +1,342 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>PlayBook Generator</title>
+
+  <!-- CodeMirror CSS -->
+  <link
+    rel="stylesheet"
+    href="https://cdn.jsdelivr.net/npm/codemirror@5.65.5/lib/codemirror.css"
+  />
+  <link
+    rel="stylesheet"
+    href="https://cdn.jsdelivr.net/npm/codemirror@5.65.5/theme/monokai.css"
+  />
+  <link
+    rel="stylesheet"
+    href="https://cdn.jsdelivr.net/npm/codemirror@5.65.5/addon/lint/lint.css"
+  />
+
+  <!-- highlight.js CSS -->
+  <link
+    rel="stylesheet"
+    href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.5.1/styles/default.min.css"
+  />
+
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      background-color: #f4f4f9;
+      padding: 20px;
+    }
+    .container {
+      display: flex;
+      flex-direction: column;
+      gap: 20px;
+    }
+    .form-container {
+      background-color: #fff;
+      padding: 20px;
+      border-radius: 8px;
+      box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+    }
+    .play-pane {
+      margin-bottom: 15px;
+      padding: 15px;
+      border: 1px solid #ddd;
+      border-radius: 8px;
+      background-color: #fafafa;
+    }
+    .play-pane h3 {
+      margin-top: 0;
+    }
+    .task-item {
+      margin-bottom: 15px;
+      padding: 15px;
+      border: 1px solid #ddd;
+      border-radius: 8px;
+      background-color: #fff;
+    }
+    label {
+      display: block;
+      margin-bottom: 5px;
+      font-weight: bold;
+    }
+    input[type="text"] {
+      width: 100%;
+      margin-bottom: 10px;
+    }
+    button {
+      padding: 10px 15px;
+      background-color: #007bff;
+      color: #fff;
+      border: none;
+      border-radius: 4px;
+      cursor: pointer;
+      font-size: 16px;
+    }
+    button + button {
+      margin-left: 10px;
+    }
+    .CodeMirror {
+      border: 1px solid #ddd;
+      border-radius: 4px;
+      font-size: 14px;
+      margin-bottom: 10px;
+      max-height: 150px;
+      overflow-y: auto;
+      padding-left: 0
+      margin-left: 0
+    }
+    .CodeMirror-lint-tooltip {
+      font-size: 12px;
+    }
+    .preview-container {
+      background-color: #fff;
+      padding: 20px;
+      border-radius: 8px;
+      box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+
+    }
+    pre {
+      background-color: #282a36;
+      color: #f8f8f2;
+      padding: 10px;
+      border-radius: 5px;
+      max-height: 400px;
+      overflow-y: auto;
+      white-space: pre-wrap;
+      word-wrap: break-word;
+    }
+  </style>
+
+  <!-- CodeMirror JS -->
+  <script
+    src="https://cdn.jsdelivr.net/npm/codemirror@5.65.5/lib/codemirror.js"
+  ></script>
+  <script src="https://cdn.jsdelivr.net/npm/codemirror@5.65.5/mode/yaml/yaml.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/codemirror@5.65.5/addon/lint/lint.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/codemirror@5.65.5/addon/lint/yaml-lint.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/js-yaml@4.1.0/dist/js-yaml.min.js"></script>
+  <script
+    src="https://cdn.jsdelivr.net/npm/codemirror@5.65.5/addon/hint/show-hint.js"
+  ></script>
+  <script src="https://cdn.jsdelivr.net/npm/codemirror@5.65.5/addon/hint/yaml-hint.js"></script>
+
+  <!-- highlight.js -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.5.1/highlight.min.js"></script>
+</head>
+<body>
+  <h1>PlayBook Generator</h1>
+  <div class="container">
+    <div class="form-container">
+      <div id="playList"></div>
+
+      <button type="button" id="addPlayBtn">Add Play</button>
+      <button type="button" id="downloadBtn">Download Playbook</button>
+    </div>
+
+    <div class="preview-container">
+      <h2>Playbook Preview</h2>
+      <pre><code id="preview" class="yaml"></code></pre>
+    </div>
+  </div>
+
+  <script>
+    // We'll store an array of "plays". Each play has:
+    // { nameInput, hostsInput, remoteUserInput, tasks: [ { nameInput, editor } ] }
+    let plays = [];
+
+    document.addEventListener("DOMContentLoaded", () => {
+      const playList = document.getElementById("playList");
+      const addPlayBtn = document.getElementById("addPlayBtn");
+      const downloadBtn = document.getElementById("downloadBtn");
+
+      // Add a new top-level play
+      function addPlay() {
+        const play = {
+          container: null,
+          nameInput: null,
+          hostsInput: null,
+          remoteUserInput: null,
+          tasks: [],
+        };
+
+        const playPane = document.createElement("div");
+        playPane.classList.add("play-pane");
+
+        const title = document.createElement("h3");
+        title.textContent = "New Play";
+        playPane.appendChild(title);
+
+        // Play name
+        const labelName = document.createElement("label");
+        labelName.textContent = "Play Name:";
+        playPane.appendChild(labelName);
+
+        const inputName = document.createElement("input");
+        inputName.type = "text";
+        inputName.placeholder = "e.g. Update web servers";
+        inputName.addEventListener("input", updatePreview);
+        playPane.appendChild(inputName);
+
+        // Hosts
+        const labelHosts = document.createElement("label");
+        labelHosts.textContent = "Hosts:";
+        playPane.appendChild(labelHosts);
+
+        const inputHosts = document.createElement("input");
+        inputHosts.type = "text";
+        inputHosts.placeholder = "e.g. webservers";
+        inputHosts.addEventListener("input", updatePreview);
+        playPane.appendChild(inputHosts);
+
+        // Remote user
+        const labelRemote = document.createElement("label");
+        labelRemote.textContent = "Remote User:";
+        playPane.appendChild(labelRemote);
+
+        const inputRemote = document.createElement("input");
+        inputRemote.type = "text";
+        inputRemote.placeholder = "e.g. root";
+        inputRemote.addEventListener("input", updatePreview);
+        playPane.appendChild(inputRemote);
+
+        // Tasks container
+        const tasksContainer = document.createElement("div");
+        tasksContainer.style.marginTop = "10px";
+        playPane.appendChild(tasksContainer);
+
+        // "Add Task" button
+        const addTaskBtn = document.createElement("button");
+        addTaskBtn.type = "button";
+        addTaskBtn.textContent = "Add Task";
+        addTaskBtn.style.marginTop = "10px";
+        addTaskBtn.addEventListener("click", () => addTask(play, tasksContainer));
+        playPane.appendChild(addTaskBtn);
+
+        // Store references
+        play.container = playPane;
+        play.nameInput = inputName;
+        play.hostsInput = inputHosts;
+        play.remoteUserInput = inputRemote;
+
+        plays.push(play);
+        playList.appendChild(playPane);
+
+        updatePreview();
+      }
+
+      // Add a task to an existing play
+      function addTask(play, tasksContainer) {
+        const task = {
+          nameInput: null,
+          editor: null,
+        };
+
+        const taskItem = document.createElement("div");
+        taskItem.classList.add("task-item");
+
+        const labelTaskName = document.createElement("label");
+        labelTaskName.textContent = "Task Name:";
+        taskItem.appendChild(labelTaskName);
+
+        const inputTaskName = document.createElement("input");
+        inputTaskName.type = "text";
+        inputTaskName.placeholder = "e.g. Ensure apache is at the latest version";
+        inputTaskName.addEventListener("input", updatePreview);
+        taskItem.appendChild(inputTaskName);
+
+        const labelDetails = document.createElement("label");
+        labelDetails.textContent = "Task YAML Details:";
+        taskItem.appendChild(labelDetails);
+
+        const textarea = document.createElement("textarea");
+        taskItem.appendChild(textarea);
+
+        // CodeMirror for the YAML
+        const editor = CodeMirror.fromTextArea(textarea, {
+          mode: "yaml",
+          theme: "monokai",
+          lineWrapping: true,
+          gutters: ["CodeMirror-lint-markers"],
+          lint: true
+        });
+        editor.on("change", updatePreview);
+
+        // Store references
+        task.nameInput = inputTaskName;
+        task.editor = editor;
+        play.tasks.push(task);
+
+        tasksContainer.appendChild(taskItem);
+        updatePreview();
+      }
+
+      // Build the final YAML for all plays
+      function updatePreview() {
+        let yaml = "---\n";
+
+        plays.forEach((play) => {
+          const playName = play.nameInput.value.trim() || "Unnamed Play";
+          const hosts = play.hostsInput.value.trim();
+          const remoteUser = play.remoteUserInput.value.trim();
+
+          // Start the play
+          yaml += `- name: ${playName}\n`;
+          if (hosts) yaml += `  hosts: ${hosts}\n`;
+          if (remoteUser) yaml += `  remote_user: ${remoteUser}\n`;
+
+          yaml += `  tasks:\n`;
+
+          play.tasks.forEach((task) => {
+            const taskName = task.nameInput.value.trim() || "Unnamed Task";
+            const details = task.editor.getValue().trim();
+
+            yaml += `    - name: ${taskName}\n`;
+
+            if (details) {
+              // Indent the details
+              const indented = details
+                .split("\n")
+                .map((line) => `      ${line}`)
+                .join("\n");
+              yaml += indented + "\n";
+            }
+          });
+
+          yaml += "\n";
+        });
+
+        document.getElementById("preview").textContent = yaml;
+        hljs.highlightAll();
+      }
+
+      // Download the final YAML as "playbook.yml"
+      function downloadPlaybook() {
+        const previewContent = document.getElementById("preview").textContent;
+        const blob = new Blob([previewContent], { type: "text/yaml" });
+        const url = URL.createObjectURL(blob);
+
+        // Create a temporary link
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = "playbook.yml";
+        document.body.appendChild(a);
+        a.click();
+
+        // Clean up
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+      }
+
+      addPlayBtn.addEventListener("click", addPlay);
+      downloadBtn.addEventListener("click", downloadPlaybook);
+
+      // Add one play by default
+      addPlay();
+    });
+  </script>
+</body>
+</html>
