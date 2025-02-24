@@ -1,42 +1,32 @@
-import yaml
-from flask import Flask, render_template, request, jsonify, send_file
+from flask import Flask, request, Response, send_from_directory
+import os
 
 app = Flask(__name__)
 
 
-@app.route('/')
-def index():
-    return render_template('index.html')
+# Serve the HTML form (index.html) at the root URL
+@app.route("/", methods=["GET"])
+def serve_index():
+    # If you have 'index.html' in the same directory:
+    return send_from_directory('.', 'index.html')
 
 
-@app.route('/generate', methods=['POST'])
-def generate_playbook():
-    try:
-        tasks = request.form.getlist('tasks')
-        actions = request.form.getlist('actions')
+@app.route("/generate", methods=["POST"])
+def generate():
+    # 'playbook' is the hidden input (or client-side field) containing the final YAML
+    playbook_yaml = request.form.get("playbook", "")
 
-        playbook_content = []
+    if not playbook_yaml.strip():
+        return "No playbook data was supplied."
 
-        for task_name, action in zip(tasks, actions):
-            try:
-                action_yaml = yaml.safe_load(action) if action else {}
-            except yaml.YAMLError as e:
-                return jsonify({'error': f'YAML syntax error in Task "{task_name}": {str(e)}'}), 400
-
-            playbook_content.append({
-                'name': task_name,
-                'tasks': [action_yaml] if action_yaml else []
-            })
-
-        playbook_path = "playbook.yml"
-        with open(playbook_path, 'w') as file:
-            yaml.dump(playbook_content, file)
-
-        return send_file(playbook_path, as_attachment=True)
-
-    except Exception as e:
-        return jsonify({'error': f'An error occurred: {str(e)}'}), 500
+    # Return the YAML so the browser downloads it as "playbook.yml"
+    return Response(
+        playbook_yaml,
+        mimetype="text/yaml",
+        headers={"Content-Disposition": "attachment; filename=playbook.yml"}
+    )
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
+    # Run Flask app on http://localhost:5000/
     app.run(debug=True)
